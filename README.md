@@ -18,22 +18,6 @@ pip3 install -r requirements.txt
 ```
 python3 bot.py
 ```
-
-Токен можно хранить в файле `.env`:
-```
-BOT_TOKEN=your_token_here
-```
-
-Можно задать имя выходного файла:
-```
-DOCX_FILENAME=message.docx
-```
-
-Ограничение доступа по ID пользователей:
-```
-ALLOWED_USER_IDS=123456789,987654321
-```
-
 Описание переменных:
 - `BOT_TOKEN` — токен бота
 - `DOCX_FILENAME` — имя выходного DOCX файла (по умолчанию `message.docx`)
