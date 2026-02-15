@@ -1,0 +1,6 @@
+services:
+  tg_to_docx_bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
