@@ -612,7 +612,7 @@ def main() -> None:
     application = ApplicationBuilder().token(token).build()
     application.bot_data["allowed_user_ids"] = allowed_user_ids
 
-    application.add_handler(MessageHandler(filters.Caption & ~filters.COMMAND, handle_caption))
+    application.add_handler(MessageHandler(filters.CAPTION & ~filters.COMMAND, handle_caption))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(
