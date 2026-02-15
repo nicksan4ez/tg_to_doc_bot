@@ -15,7 +15,7 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 from telegram import InputFile, Update
 from telegram.constants import ParseMode
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 FONT_NAME = "Times New Roman"
 FONT_SIZE_PT = 14
@@ -54,6 +54,19 @@ class TextStyle:
 class StyledSegment:
     text: str
     style: TextStyle
+
+
+START_HELP_TEXT = (
+    "Бот для простой конвертации форматированного текста из DOCX -> TG или TG -> DOCX\n\n"
+    "К примеру, если прислать ему пост из Telegram, он сделает из него документ. Если прислать документ DOCX - он оформит как пост.\n\n"
+    "- Шрифт: Times New Roman, 14 pt\n"
+    "- Выравнивание: по ширине\n"
+    "- Отступ первой строки: 1.25 см\n"
+    "- Межстрочный интервал: «точно», 18 пт\n"
+    "- Отступы до/после абзаца: 0 пт\n"
+    "- Каждая новая строка в сообщении -> новый абзац\n"
+    "- Форматирование из DOCX в Telegram поддерживает: жирный, курсив, подчёркивание, зачёркивание, ссылки"
+)
 
 
 class HourlyHttpxFilter(logging.Filter):
@@ -478,6 +491,18 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     logging.info("OUT docx to %s: %s", user_id, filename)
 
 
+async def handle_start_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    if not message:
+        return
+    if not _is_user_allowed(
+        message.from_user.id if message.from_user else None,
+        context.application.bot_data.get("allowed_user_ids"),
+    ):
+        return
+    await message.reply_text(START_HELP_TEXT)
+
+
 def _media_types(message) -> List[str]:
     types = []
     if message.photo:
@@ -612,6 +637,7 @@ def main() -> None:
     application = ApplicationBuilder().token(token).build()
     application.bot_data["allowed_user_ids"] = allowed_user_ids
 
+    application.add_handler(CommandHandler(["start", "help"], handle_start_help))
     application.add_handler(MessageHandler(filters.CAPTION & ~filters.COMMAND, handle_caption))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
