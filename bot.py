@@ -429,6 +429,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     ):
         return
 
+    user_id = message.from_user.id if message.from_user else None
+    preview = message.text.replace("\n", " ")[:120]
+    logging.info("IN text from %s: %s", user_id, preview)
+
     text = message.text
     entities = message.entities or []
 
@@ -439,6 +443,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     doc.save(buffer)
     buffer.seek(0)
     await message.reply_document(document=InputFile(buffer, filename=filename))
+    logging.info("OUT docx to %s: %s", user_id, filename)
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -451,9 +456,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     ):
         return
 
+    user_id = message.from_user.id if message.from_user else None
     doc = message.document
     filename = doc.file_name or "document"
     ext = os.path.splitext(filename)[1].lower()
+    logging.info("IN doc from %s: %s", user_id, filename)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         input_path = os.path.join(tmpdir, filename)
@@ -472,6 +479,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             for chunk in split_telegram_message(html_text):
                 await message.reply_text(chunk, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            logging.info("OUT text to %s: %d chars", user_id, len(html_text))
         except Exception as exc:
             logging.exception("Failed to process document")
             await message.reply_text(f"Ошибка обработки документа: {exc}")
