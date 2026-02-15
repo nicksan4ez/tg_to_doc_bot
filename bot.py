@@ -478,6 +478,68 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     logging.info("OUT docx to %s: %s", user_id, filename)
 
 
+def _media_types(message) -> List[str]:
+    types = []
+    if message.photo:
+        types.append("photo")
+    if message.video:
+        types.append("video")
+    if message.audio:
+        types.append("audio")
+    if message.voice:
+        types.append("voice")
+    if message.video_note:
+        types.append("video_note")
+    if message.animation:
+        types.append("animation")
+    if message.sticker:
+        types.append("sticker")
+    if message.contact:
+        types.append("contact")
+    if message.location:
+        types.append("location")
+    if message.venue:
+        types.append("venue")
+    if message.document:
+        types.append("document")
+    return types
+
+
+async def handle_caption(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    if not message or not message.caption:
+        return
+    if not _is_user_allowed(
+        message.from_user.id if message.from_user else None,
+        context.application.bot_data.get("allowed_user_ids"),
+    ):
+        return
+
+    user_id = message.from_user.id if message.from_user else None
+    media = _media_types(message)
+    if media:
+        logging.warning("IN media from %s ignored: %s", user_id, ",".join(media))
+
+    preview = message.caption.replace("\n", " ")[:120]
+    logging.info("IN caption from %s: %s", user_id, preview)
+
+    text = message.caption
+    entities = message.caption_entities or []
+    doc = telegram_text_to_docx(text, entities)
+
+    max_len = int(os.getenv("DOCX_FILENAME_MAX", str(DOCX_FILENAME_MAX_DEFAULT)))
+    derived = _derive_filename_from_text(text, max_len)
+    filename = derived or os.getenv("DOCX_FILENAME", DOCX_DEFAULT_FILENAME)
+    if not filename.lower().endswith(".docx"):
+        filename = f"{filename}.docx"
+
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    await message.reply_document(document=InputFile(buffer, filename=filename))
+    logging.info("OUT docx to %s: %s", user_id, filename)
+
+
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
     if not message or not message.document:
@@ -517,6 +579,23 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await message.reply_text(f"Ошибка обработки документа: {exc}")
 
 
+async def handle_unsupported_media(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    if not message:
+        return
+    if not _is_user_allowed(
+        message.from_user.id if message.from_user else None,
+        context.application.bot_data.get("allowed_user_ids"),
+    ):
+        return
+    if message.caption:
+        return
+    media = _media_types(message)
+    if media:
+        user_id = message.from_user.id if message.from_user else None
+        logging.error("Unsupported media from %s (no caption): %s", user_id, ",".join(media))
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     httpx_logger = logging.getLogger("httpx")
@@ -533,8 +612,15 @@ def main() -> None:
     application = ApplicationBuilder().token(token).build()
     application.bot_data["allowed_user_ids"] = allowed_user_ids
 
+    application.add_handler(MessageHandler(filters.Caption & ~filters.COMMAND, handle_caption))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    application.add_handler(
+        MessageHandler(
+            (filters.PHOTO | filters.VIDEO | filters.AUDIO | filters.VOICE | filters.ANIMATION | filters.VIDEO_NOTE | filters.Sticker),
+            handle_unsupported_media,
+        )
+    )
 
     logging.info("Bot started")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
