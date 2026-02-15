@@ -22,6 +22,7 @@ FONT_SIZE_PT = 14
 FIRST_LINE_INDENT_CM = 1.25
 LINE_SPACING_PT = 18
 DOCX_DEFAULT_FILENAME = "message.docx"
+DOCX_FILENAME_MAX_DEFAULT = 60
 ALLOWED_USER_IDS_ENV = "ALLOWED_USER_IDS"
 
 TELEGRAM_MAX_LEN = 4096
@@ -72,6 +73,33 @@ class HourlyHttpxFilter(logging.Filter):
             self._last_emit = now
             return True
         return False
+
+
+def _sanitize_filename(value: str) -> str:
+    cleaned = "".join(ch for ch in value if ch.isalnum() or ch in (" ", "-", "_"))
+    cleaned = " ".join(cleaned.split())
+    return cleaned.strip(" ._-")
+
+
+def _derive_filename_from_text(text: str, max_len: int) -> str:
+    if not text:
+        return ""
+    cutoff = len(text)
+    newline_idx = text.find("\n")
+    if newline_idx != -1:
+        cutoff = min(cutoff, newline_idx)
+    dot_idx = text.find(".")
+    if dot_idx != -1:
+        cutoff = min(cutoff, dot_idx)
+    snippet = text[:cutoff].strip()
+    if not snippet:
+        return ""
+    cleaned = _sanitize_filename(snippet)
+    if not cleaned:
+        return ""
+    if max_len > 0:
+        cleaned = cleaned[:max_len].rstrip(" ._-")
+    return cleaned
 
 
 def _parse_allowed_user_ids(value: Optional[str]) -> Optional[set[int]]:
@@ -438,7 +466,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     doc = telegram_text_to_docx(text, entities)
 
-    filename = os.getenv("DOCX_FILENAME", DOCX_DEFAULT_FILENAME)
+    max_len = int(os.getenv("DOCX_FILENAME_MAX", str(DOCX_FILENAME_MAX_DEFAULT)))
+    derived = _derive_filename_from_text(text, max_len)
+    filename = derived or os.getenv("DOCX_FILENAME", DOCX_DEFAULT_FILENAME)
+    if not filename.lower().endswith(".docx"):
+        filename = f"{filename}.docx"
     buffer = BytesIO()
     doc.save(buffer)
     buffer.seek(0)
